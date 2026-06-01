@@ -1,0 +1,18 @@
+FROM node:22-alpine
+
+WORKDIR /usr/src/app
+
+COPY backend/package*.json ./
+COPY backend/prisma ./prisma/
+
+RUN npm ci
+
+COPY backend/ .
+
+RUN npm run build
+RUN npx prisma generate
+
+# Copy templates directory for WebView compilations
+COPY templates /templates
+
+CMD ["node", "dist/worker/apkBuildWorker.js"]

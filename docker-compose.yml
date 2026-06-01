@@ -1,0 +1,63 @@
+version: '3.9'
+
+services:
+  app:
+    build: 
+      context: ./backend
+      dockerfile: Dockerfile
+    ports:
+      - "3001:3001"
+    environment:
+      DATABASE_URL: postgresql://user:pass@db:5432/buildrx?schema=public
+      REDIS_URL: redis://redis:6379
+      JWT_SECRET: ${JWT_SECRET:-buildrx_fallback_jwt_secret_key_12345}
+      REFRESH_SECRET: ${REFRESH_SECRET:-buildrx_fallback_refresh_secret_key_67890}
+      S3_BUCKET: ${S3_BUCKET}
+      AWS_ACCESS_KEY_ID: ${AWS_ACCESS_KEY_ID}
+      AWS_SECRET_ACCESS_KEY: ${AWS_SECRET_ACCESS_KEY}
+      MIDTRANS_SERVER_KEY: ${MIDTRANS_SERVER_KEY}
+      KEYSTORE_PASS: ${KEYSTORE_PASS:-buildrxpass}
+      SIMULATE_APK_BUILD: ${SIMULATE_APK_BUILD:-true}
+    volumes:
+      - /tmp/builds:/tmp/builds
+    depends_on:
+      - db
+      - redis
+
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: buildrx
+      POSTGRES_USER: user
+      POSTGRES_PASSWORD: pass
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+    volumes:
+      - redisdata:/data
+
+  worker:
+    build:
+      context: .
+      dockerfile: Dockerfile.worker
+    environment:
+      DATABASE_URL: postgresql://user:pass@db:5432/buildrx?schema=public
+      REDIS_URL: redis://redis:6379
+      KEYSTORE_PASS: ${KEYSTORE_PASS:-buildrxpass}
+      SIMULATE_APK_BUILD: ${SIMULATE_APK_BUILD:-true}
+    volumes:
+      - /tmp/builds:/tmp/builds
+      - /certs:/certs
+    depends_on:
+      - db
+      - redis
+
+volumes:
+  pgdata:
+  redisdata:

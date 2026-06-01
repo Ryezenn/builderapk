@@ -1,0 +1,172 @@
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+model User {
+  id            String         @id @default(uuid())
+  email         String         @unique
+  passwordHash  String
+  name          String
+  avatarUrl     String?
+  plan          Plan           @default(FREE)
+  createdAt     DateTime       @default(now())
+  apkBuilds     ApkBuild[]
+  apis          Api[]
+  apiKeys       ApiKey[]
+  subscriptions Subscription[]
+  invoices      Invoice[]
+
+  @@map("users")
+}
+
+model ApkBuild {
+  id            String      @id @default(uuid())
+  userId        String
+  user          User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  appName       String
+  packageName   String      // e.g. com.yourname.app
+  websiteUrl    String
+  iconUrl       String?
+  splashUrl     String?
+  themeColor    String      @default("#000000")
+  statusBar     String      @default("dark")
+  orientation   String      @default("portrait")
+  allowBack     Boolean     @default(true)
+  offlinePage   Boolean     @default(false)
+  version       String      @default("1.0.0")
+  versionCode   Int         @default(1)
+  status        BuildStatus @default(QUEUED)
+  apkUrl        String?
+  errorLog      String?
+  buildDuration Int?        // seconds
+  createdAt     DateTime    @default(now())
+  completedAt   DateTime?
+
+  @@map("apk_builds")
+}
+
+model Api {
+  id            String      @id @default(uuid())
+  userId        String
+  user          User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  name          String
+  slug          String      @unique  // used in URL: /gateway/{slug}
+  description   String
+  baseUrl       String      // the actual upstream URL we proxy to
+  category      String
+  isPublic      Boolean     @default(true)
+  isPaid        Boolean     @default(false)
+  pricePerMonth Float?
+  freeQuota     Int         @default(1000)    // free calls/month
+  paidQuota     Int?                        // paid calls/month
+  rateLimit     Int         @default(60)      // calls per minute
+  status        ApiStatus   @default(ACTIVE)
+  endpoints     Endpoint[]
+  keys          ApiKey[]
+  createdAt     DateTime    @default(now())
+  totalCalls    BigInt      @default(0)
+
+  @@map("apis")
+}
+
+model Endpoint {
+  id          String   @id @default(uuid())
+  apiId       String
+  api         Api      @relation(fields: [apiId], references: [id], onDelete: Cascade)
+  method      String   // GET POST PUT DELETE
+  path        String   // e.g. /users/{id}
+  summary     String
+  description String?
+  parameters  Json?    // OpenAPI parameter objects
+  requestBody Json?
+  responses   Json?
+  example     Json?
+
+  @@map("endpoints")
+}
+
+model ApiKey {
+  id          String    @id @default(uuid())
+  userId      String
+  user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  apiId       String
+  api         Api       @relation(fields: [apiId], references: [id], onDelete: Cascade)
+  key         String    @unique  // "bx_live_xxxxxxxxxxxx"
+  label       String    @default("Default Key")
+  isActive    Boolean   @default(true)
+  callsUsed   BigInt    @default(0)
+  callsLimit  BigInt?
+  expiresAt   DateTime?
+  lastUsedAt  DateTime?
+  createdAt   DateTime  @default(now())
+  logs        ApiLog[]
+
+  @@map("api_keys")
+}
+
+model ApiLog {
+  id         String   @id @default(uuid())
+  apiKeyId   String
+  apiKey     ApiKey   @relation(fields: [apiKeyId], references: [id], onDelete: Cascade)
+  method     String
+  path       String
+  statusCode Int
+  latencyMs  Int
+  ipAddress  String
+  userAgent  String?
+  createdAt  DateTime @default(now())
+
+  @@map("api_logs")
+}
+
+model Subscription {
+  id        String    @id @default(uuid())
+  userId    String
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  apiId     String
+  plan      String    // "free" | "starter" | "pro"
+  status    String    // "active" | "cancelled" | "expired"
+  startedAt DateTime  @default(now())
+  expiresAt DateTime?
+
+  @@map("subscriptions")
+}
+
+model Invoice {
+  id         String    @id @default(uuid())
+  userId     String
+  user       User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  amount     Float
+  currency   String    @default("IDR")
+  status     String    // "pending" | "paid" | "failed"
+  paymentRef String?
+  paidAt     DateTime?
+  createdAt  DateTime  @default(now())
+
+  @@map("invoices")
+}
+
+enum Plan {
+  FREE
+  STARTER
+  PRO
+  ENTERPRISE
+}
+
+enum BuildStatus {
+  QUEUED
+  BUILDING
+  SUCCESS
+  FAILED
+}
+
+enum ApiStatus {
+  ACTIVE
+  INACTIVE
+  SUSPENDED
+}
